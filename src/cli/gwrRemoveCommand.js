@@ -290,6 +290,43 @@ function resolveCodecPreset(name) {
       }
     };
   }
+  if (name === 'raw-rgba' || name === 'raw') {
+    return {
+      decodeImageData(buffer) {
+        const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+        if (buf.length < 8) {
+          throw new Error('Invalid raw-rgba buffer: payload smaller than 8-byte header');
+        }
+        const width = buf.readUInt32LE(0);
+        const height = buf.readUInt32LE(4);
+        const expectedDataLength = width * height * 4;
+        const totalExpected = 8 + expectedDataLength;
+        if (buf.length < totalExpected) {
+          throw new Error(`Invalid raw-rgba buffer: expected ${totalExpected} bytes, got ${buf.length}`);
+        }
+        return {
+          width,
+          height,
+          data: new Uint8ClampedArray(
+            buf.buffer,
+            buf.byteOffset + 8,
+            expectedDataLength
+          )
+        };
+      },
+      encodeImageData(imageData) {
+        const header = Buffer.alloc(8);
+        header.writeUInt32LE(imageData.width, 0);
+        header.writeUInt32LE(imageData.height, 4);
+        const pixelBuf = Buffer.from(
+          imageData.data.buffer,
+          imageData.data.byteOffset,
+          imageData.data.byteLength
+        );
+        return Buffer.concat([header, pixelBuf]);
+      }
+    };
+  }
   return null;
 }
 

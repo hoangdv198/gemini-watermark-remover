@@ -188,3 +188,36 @@ test('gwr remove should accept -- as option terminator for output values that st
     await rm(path.join(REPO_ROOT_PATH, outputDirName), { recursive: true, force: true });
   }
 });
+
+test('gwr remove should process raw-rgba binary buffer with --decoder raw-rgba and --encoder raw-rgba', async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'gwr-cli-raw-'));
+  const inputPath = path.join(tempDir, 'input.raw');
+  const outputPath = path.join(tempDir, 'output.raw');
+
+  const width = 16;
+  const height = 16;
+  const header = Buffer.alloc(8);
+  header.writeUInt32LE(width, 0);
+  header.writeUInt32LE(height, 4);
+  const pixels = Buffer.alloc(width * height * 4, 128);
+  await writeFile(inputPath, Buffer.concat([header, pixels]));
+
+  const result = await runCli([
+    'remove',
+    inputPath,
+    '--output',
+    outputPath,
+    '--decoder',
+    'raw-rgba',
+    '--encoder',
+    'raw-rgba',
+    '--json'
+  ]);
+
+  assert.equal(result.code, 0);
+  const outBuf = await readFile(outputPath);
+  assert.equal(outBuf.length, 8 + width * height * 4);
+  assert.equal(outBuf.readUInt32LE(0), width);
+  assert.equal(outBuf.readUInt32LE(4), height);
+});
+

@@ -13,6 +13,7 @@ import tempfile
 import threading
 import queue
 import io
+import struct
 from pathlib import Path
 
 import tkinter as tk
@@ -85,8 +86,8 @@ def find_gwr_cli():
 
     for d in search_dirs:
         candidates = [
-            d / "bin" / "gwr.mjs",
             d / "dist" / "cli-bundle.mjs",
+            d / "bin" / "gwr.mjs",
         ]
         for c in candidates:
             if c.is_file():
@@ -436,25 +437,58 @@ class WatermarkRemoverApp(tk.Tk):
 
     def _run_removal_worker(self):
         temp_dir = tempfile.mkdtemp(prefix="gwr_gui_")
+        input_raw_path = os.path.join(temp_dir, "input.raw")
+        output_raw_path = os.path.join(temp_dir, "output.raw")
         output_temp_path = os.path.join(temp_dir, "cleaned_output.png")
 
-        cmd = [
-            self.node_path,
-            self.gwr_cli_path,
-            "remove",
-            self.input_file_path,
-            "--output",
-            output_temp_path,
-            "--overwrite",
-            "--json"
-        ]
-
         try:
-            # Chọn cwd là thư mục gốc của repo chứa node_modules
+            # 1. Đọc và chuyển đổi ảnh sang RGBA bằng Pillow
+            orig_pil = Image.open(self.input_file_path)
+            try:
+                from PIL import ImageOps
+                orig_pil = ImageOps.exif_transpose(orig_pil)
+            except Exception:
+                pass
+
+            rgba_img = orig_pil.convert("RGBA")
+            w, h = rgba_img.size
+
+            # Ghi file nhị phân raw-rgba: 4 bytes width, 4 bytes height, tiếp nối w*h*4 raw bytes
+            header = struct.pack("<II", w, h)
+            with open(input_raw_path, "wb") as f:
+                f.write(header + rgba_img.tobytes())
+
+            cmd = [
+                self.node_path,
+                self.gwr_cli_path,
+                "remove",
+                input_raw_path,
+                "--output",
+                output_raw_path,
+                "--decoder",
+                "raw-rgba",
+                "--encoder",
+                "raw-rgba",
+                "--overwrite",
+                "--json"
+            ]
+
+            # 2. Cấu hình biến môi trường và thư mục làm việc
+            env = os.environ.copy()
+            node_paths = [
+                str(Path("E:/dev/gemini-watermark-remover/node_modules")),
+                str(get_base_dir() / "node_modules"),
+                str(Path(sys.executable).parent / "node_modules")
+            ]
+            if env.get("NODE_PATH"):
+                node_paths.append(env["NODE_PATH"])
+            env["NODE_PATH"] = os.pathsep.join([p for p in node_paths if os.path.exists(p)])
+
             cwd_path = str(Path(self.gwr_cli_path).resolve().parent.parent) if self.gwr_cli_path else str(get_base_dir())
             process = subprocess.run(
                 cmd,
                 cwd=cwd_path,
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=60
@@ -465,27 +499,45 @@ class WatermarkRemoverApp(tk.Tk):
                 self.msg_queue.put(("error", err_msg))
                 return
 
-            # Đọc JSON đầu ra
+            # 3. Đọc JSON siêu dữ liệu đầu ra
             stdout_clean = process.stdout.strip()
             meta_json = None
             if stdout_clean:
                 try:
-                    # Tìm chuỗi JSON trong trường hợp có warning kèm theo
                     lines = stdout_clean.splitlines()
                     for line in reversed(lines):
                         line = line.strip()
                         if line.startswith("{") and line.endswith("}"):
-                            meta_json = json.loads(line)
+                            parsed = json.loads(line)
+                            meta_json = parsed.get("meta") if "meta" in parsed else parsed
                             break
                 except Exception:
                     pass
 
-            # Kiểm tra tệp kết quả
-            if not os.path.exists(output_temp_path):
+            # 4. Kiểm tra tệp kết quả raw và chuyển thành ảnh PIL
+            if not os.path.exists(output_raw_path):
                 self.msg_queue.put(("error", "Lệnh chạy xong nhưng không tạo ra tệp ảnh kết quả."))
                 return
 
-            cleaned_pil = Image.open(output_temp_path)
+            with open(output_raw_path, "rb") as f:
+                raw_data = f.read()
+
+            if len(raw_data) < 8:
+                self.msg_queue.put(("error", "Dữ liệu trả về từ engine không hợp lệ."))
+                return
+
+            out_w, out_h = struct.unpack("<II", raw_data[:8])
+            expected_data_len = out_w * out_h * 4
+            if len(raw_data) < 8 + expected_data_len:
+                self.msg_queue.put(("error", f"Dữ liệu ảnh không đủ ({len(raw_data)} / {8 + expected_data_len} bytes)."))
+                return
+
+            pixel_bytes = raw_data[8:8 + expected_data_len]
+            cleaned_pil = Image.frombytes("RGBA", (out_w, out_h), pixel_bytes)
+
+            # Lưu ảnh PNG kết quả
+            cleaned_pil.save(output_temp_path, format="PNG")
+
             self.msg_queue.put(("success", cleaned_pil, output_temp_path, meta_json))
 
         except subprocess.TimeoutExpired:
