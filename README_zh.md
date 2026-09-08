@@ -108,6 +108,28 @@
 - 处理预览图时会保留原图显示，并叠加克制的 `Processing...` 状态遮罩
 - 如果预览图处理失败，不会把页面原图隐藏掉或替换成空白
 
+### Windows 桌面客户端（GUI / EXE）
+
+专为 Windows 设计的原生桌面客户端，支持原图与去水印结果双栏对比、右下角水印区域 2x 细节放大对比、一键复制及保存图片。
+
+<p align="center">
+  <img src="docs/gui-preview.png" alt="Gemini Watermark Remover Windows GUI" width="700">
+</p>
+
+- **独立 EXE 运行**：直接双击运行 `GeminiWatermarkRemover.exe`（无需打开终端或浏览器）。
+- **从源码运行**：
+  ```bash
+  python gui_app.py
+  # 或:
+  pnpm run gui
+  ```
+- **重新打包 EXE**：
+  ```bash
+  python scripts/build_exe.py
+  # 或:
+  pnpm run build:exe
+  ```
+
 ### Skill
 
 面向使用 AI 编程 agent 的开发者：

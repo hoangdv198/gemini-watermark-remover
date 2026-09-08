@@ -108,6 +108,28 @@ Current userscript boundaries:
 - preview images keep the original visible while processing, with a subdued `Processing...` overlay
 - if preview processing fails, the original page image stays visible and usable
 
+### Windows Desktop App (GUI / EXE)
+
+A dedicated native Windows desktop application with side-by-side comparison, bottom-right watermark ROI zoom (2x), and one-click copy/save.
+
+<p align="center">
+  <img src="docs/gui-preview.png" alt="Gemini Watermark Remover Windows GUI" width="700">
+</p>
+
+- **Standalone EXE**: Run `GeminiWatermarkRemover.exe` directly on Windows (no terminal or browser needed).
+- **Run from Source**:
+  ```bash
+  python gui_app.py
+  # or:
+  pnpm run gui
+  ```
+- **Build the EXE**:
+  ```bash
+  python scripts/build_exe.py
+  # or:
+  pnpm run build:exe
+  ```
+
 ### Skill
 
 For workflows that involve AI coding agents:

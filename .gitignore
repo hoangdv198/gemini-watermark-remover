@@ -54,3 +54,12 @@ Thumbs.db
 .history/
 .idea/
 .vscode/
+
+# Python & PyInstaller
+__pycache__/
+*.pyc
+build/
+release/*.exe
+*.exe
+scratch/
+test-*.png

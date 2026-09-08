@@ -69,6 +69,8 @@
     }
   },
   "scripts": {
+    "gui": "python gui_app.py",
+    "build:exe": "python scripts/build_exe.py",
     "dev": "node build.js",
     "build": "node build.js --prod",
     "clean": "node scripts/clean.js",
