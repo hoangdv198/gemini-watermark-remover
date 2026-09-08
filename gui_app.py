@@ -26,6 +26,14 @@ try:
 except ImportError:
     HAS_WIN32CLIPBOARD = False
 
+# Cấu hình AppUserModelID cho Windows để ghim thanh tác vụ (Taskbar Pinning) hiển thị đúng icon và tên ứng dụng
+try:
+    import ctypes
+    APP_ID = "gargantuax.geminiwatermarkremover.desktop.gui"
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+except Exception:
+    pass
+
 # Màu sắc giao diện (Dark Theme Hiện Đại)
 COLOR_BG = "#13141f"
 COLOR_CARD = "#1c1e2d"
@@ -114,10 +122,41 @@ class WatermarkRemoverApp(tk.Tk):
         self.gwr_cli_path = find_gwr_cli()
         self.msg_queue = queue.Queue()
 
+        self._set_app_icon()
         self._setup_styles()
         self._build_ui()
         self._check_environment()
         self._poll_msg_queue()
+
+    def _set_app_icon(self):
+        base_dir = get_base_dir()
+        icon_candidates = [
+            base_dir / "src" / "extension" / "assets" / "app-icon.ico",
+            base_dir / "assets" / "app-icon.ico",
+            base_dir / "app-icon.ico",
+            Path(__file__).resolve().parent / "src" / "extension" / "assets" / "app-icon.ico",
+        ]
+        for icon_path in icon_candidates:
+            if icon_path.is_file():
+                try:
+                    self.iconbitmap(str(icon_path))
+                    break
+                except Exception:
+                    pass
+
+        png_candidates = [
+            base_dir / "src" / "extension" / "assets" / "icon-128.png",
+            base_dir / "assets" / "icon-128.png",
+            Path(__file__).resolve().parent / "src" / "extension" / "assets" / "icon-128.png"
+        ]
+        for png_path in png_candidates:
+            if png_path.is_file():
+                try:
+                    self._app_icon_photo = ImageTk.PhotoImage(file=str(png_path))
+                    self.iconphoto(True, self._app_icon_photo)
+                    break
+                except Exception:
+                    pass
 
     def _poll_msg_queue(self):
         try:
