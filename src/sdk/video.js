@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +29,19 @@ function isHttpUrl(value) {
 }
 
 export function resolveDefaultVideoPreviewPage({ moduleUrl = import.meta.url } = {}) {
-    return fileURLToPath(new URL('../../dist/video-preview.html', moduleUrl));
+    const defaultCandidate = fileURLToPath(new URL('../../dist/video-preview.html', moduleUrl));
+    if (existsSync(defaultCandidate)) {
+        return defaultCandidate;
+    }
+    const sameDirCandidate = fileURLToPath(new URL('./video-preview.html', moduleUrl));
+    if (existsSync(sameDirCandidate)) {
+        return sameDirCandidate;
+    }
+    const parentDistCandidate = fileURLToPath(new URL('../dist/video-preview.html', moduleUrl));
+    if (existsSync(parentDistCandidate)) {
+        return parentDistCandidate;
+    }
+    return defaultCandidate;
 }
 
 async function assertReadableFile(filePath, label) {
@@ -195,6 +207,35 @@ async function collectVideoControls(page) {
     }));
 }
 
+async function launchVideoBrowser(chromium) {
+    try {
+        return await chromium.launch({ headless: true });
+    } catch (launchError) {
+        for (const channel of ['chrome', 'msedge']) {
+            try {
+                return await chromium.launch({ headless: true, channel });
+            } catch {
+                // Try next channel
+            }
+        }
+        throw launchError;
+    }
+}
+
+async function loadPlaywrightModule() {
+    try {
+        return await import('playwright');
+    } catch {
+        try {
+            const { createRequire } = await import('node:module');
+            const req = createRequire(import.meta.url);
+            return req('playwright');
+        } catch (error) {
+            throw new Error('Video processing requires the optional "playwright" dependency', { cause: error });
+        }
+    }
+}
+
 async function processVideoWithPreviewPage(inputPath, options = {}) {
     const {
         pagePath = resolveDefaultVideoPreviewPage(),
@@ -214,10 +255,12 @@ async function processVideoWithPreviewPage(inputPath, options = {}) {
         await assertReadableFile(pagePath, 'Video preview page');
     }
 
-    const { chromium } = await import('playwright').catch((error) => {
-        throw new Error('Video processing requires the optional "playwright" dependency', { cause: error });
-    });
-    const browser = await chromium.launch({ headless: true });
+    const playwright = await loadPlaywrightModule();
+    const chromium = playwright.chromium || playwright.default?.chromium;
+    if (!chromium) {
+        throw new Error('Playwright chromium export is unavailable');
+    }
+    const browser = await launchVideoBrowser(chromium);
     try {
         return await withLocalVideoPreviewPage(pagePath, async (pageUrl) => {
             const page = await browser.newPage();

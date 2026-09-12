@@ -98,11 +98,13 @@ console.log('✔ CLI bundle built successfully at dist/cli-bundle.mjs');
         print(f"✔ Đóng gói kèm Node.js runtime ({node_exe})")
         pyinstaller_cmd.extend(["--add-binary", f"{node_exe}{os.pathsep}."])
 
-    # Đính kèm cli bundle và các tài nguyên cần thiết
+    # Đính kèm cli bundle và các tài nguyên cần thiết (bao gồm video-preview.html, video-app.js, models, onnxruntime)
     pyinstaller_cmd.extend([
-        "--add-data", f"{ROOT_DIR / 'dist' / 'cli-bundle.mjs'}{os.pathsep}dist",
+        "--add-data", f"{ROOT_DIR / 'dist'}{os.pathsep}dist",
         "--add-data", f"{ROOT_DIR / 'bin'}{os.pathsep}bin",
         "--add-data", f"{ROOT_DIR / 'src'}{os.pathsep}src",
+        "--hidden-import", "cv2",
+        "--hidden-import", "PIL",
     ])
     if icon_ico.is_file():
         pyinstaller_cmd.extend(["--add-data", f"{icon_ico}{os.pathsep}assets"])
@@ -145,6 +147,13 @@ oLink.Save
                     print("👉 Bạn có thể bấm chuột phải vào icon này và chọn 'Pin to taskbar' (Ghim vào thanh tác vụ)!")
         except Exception as e:
             print(f"⚠ Không thể tạo shortcut desktop: {e}")
+
+        # Đồng bộ ra file EXE ở thư mục gốc
+        try:
+            shutil.copy2(exe_output, ROOT_DIR / "GeminiWatermarkRemover.exe")
+            print(f"✔ Đã đồng bộ file EXE ra thư mục gốc: {ROOT_DIR / 'GeminiWatermarkRemover.exe'}")
+        except Exception as e:
+            print(f"⚠ Không thể đồng bộ EXE ra thư mục gốc: {e}")
     else:
         print("❌ Không tìm thấy file EXE sau khi đóng gói.")
         sys.exit(1)
